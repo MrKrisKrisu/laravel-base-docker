@@ -4,6 +4,8 @@
 
 ## Example usage
 
+Add the following files to your laravel project and adapt the paths to your requirements and paths.
+
 ### Dockerfile
 
 ```dockerfile
@@ -26,9 +28,54 @@ COPY --from=NodeBuildContainer --chown=www-data:www-data /app/public/fonts /var/
 COPY --from=NodeBuildContainer --chown=www-data:www-data /app/public/css /var/www/html/public/css
 COPY --from=ComposerBuildContainer --chown=www-data:www-data /app/vendor /var/www/html/vendor
 
-CMD ["/var/www/html/docker-entrypoint.sh"] #Adapt to your needs
+CMD ["/var/www/html/docker-entrypoint.sh"]
 
 EXPOSE 80/tcp
+```
+
+### docker-entrypoint.sh
+
+```bash
+#!/bin/bash
+set -e
+role=${CONTAINER_ROLE:-app}
+
+cd /var/www/html
+wait-for-it "$DB_HOST:${DB_PORT:=3306}"
+runuser -u www-data -- php artisan optimize
+runuser -u www-data -- php artisan config:clear
+
+if [ "$role" = "app" ]; then
+
+    echo "Running as app..."
+    if [ "$APP_ENV" = 'local' ]; then
+        echo "Running as local environment."
+        runuser -u www-data -- php artisan migrate --seed --force
+    else
+        echo "Running as productive environment."
+        runuser -u www-data -- php artisan migrate --force
+    fi
+
+    apache2-foreground
+
+elif [ "$role" = "queue" ]; then
+
+    echo "Running the queue..."
+    runuser -u www-data -- php artisan queue:work
+
+elif [ "$role" = "scheduler" ]; then
+
+    echo "Running as scheduler..."
+    while true
+    do
+        runuser -u www-data -- php artisan schedule:run --verbose --no-interaction
+        sleep 60
+    done
+
+else
+    echo "Could not match the container role \"$role\""
+    exit 1
+fi
 ```
 
 ### docker-compose.yml
