@@ -1,4 +1,4 @@
-FROM php:8.1.8-apache
+FROM php:8.1.10-apache
 WORKDIR /var/www/html
 
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
